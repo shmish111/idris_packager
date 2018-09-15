@@ -12,6 +12,7 @@ scala_binary(
       "//ip/fileops:fileops",
       "//ip/ipkgops:ipkgops",
       "//ip/fileops/path:path"],
-    main_class = "ip.IdrisPackager"
+    main_class = "ip.IdrisPackager",
+    visibility = ["//visibility:public"],
 )
 
