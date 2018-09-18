@@ -24,8 +24,8 @@ object IdrisPackager {
       for {
         arguments <- parseArguments(argumentStrings)
         _         <- arguments match {
-                       case Arguments.Create(modulePath, targetPath) =>
-                         create(modulePath, targetPath)
+                       case Arguments.Create(idrisPath, modulePath, targetPath) =>
+                         create(idrisPath, modulePath, targetPath)
                        case Arguments.Idris(idrisPath, idrisModules, idrisArguments) =>
                          runIdris(idrisPath, idrisModules, idrisArguments)
                      }
@@ -107,11 +107,28 @@ object IdrisPackager {
 
   }
 
-  def create(modulePath: AbsolutePath, target: AbsolutePath): RU = {
+  def create(idrisPath: AbsolutePath, modulePath: AbsolutePath, target: AbsolutePath): RU = {
 
     println(s"\n The path is: $modulePath")
 
+    println(s"Idris is located at $idrisPath")
+    def run(pwd: AbsolutePath, args: String*): Unit = {
+      import scala.sys.process._
+      val params = Seq(idrisPath.toString) ++ args
+      println("Going to execute: ")
+      println(params.mkString(" "))
+      Process(
+        params,
+        Some(pwd.toJava.toFile)).!
+      println("Executed")
+      ()
+    }
+
     for {
+
+      root      <- modulePath.parent
+                       .toRight(s"The package file at '$modulePath' seems to have no parent")
+      _          = run(root, "--build", modulePath.toString)
 
       content   <- readUTF8(modulePath)
                        .mapError(error => s"The content of the file could not be read because: $error")
@@ -137,9 +154,6 @@ object IdrisPackager {
                        .map(_.mapError(error => s"target directory could not be created, due to: $error"))
                        .toRight("Target directory could not be created because, for some reason, the target file has no parent")
                        .flatMap(identity)
-
-      root      <- modulePath.parent
-                       .toRight(s"The package file at '$modulePath' seems to have no parent")
       _          = println(s"The root of the zip file is going to be picked up from '$root'")
 
       ipkgFile  <- modulePath.last
@@ -148,12 +162,19 @@ object IdrisPackager {
 
       modules   <- ipkgMeta
                        .modules
-                       .map(m =>
-                          Path(m + ".idr")
-                            .flatMap {
-                               case r: RelativePath => Right(r)
-                               case a: AbsolutePath => Left(s"All modules should be relative paths, but '$a' is absolute")
-                             }
+                       .flatMap(m =>
+                          List(
+                            Path(m.replace('.', '/') + ".idr")
+                              .flatMap {
+                                 case r: RelativePath => Right(r)
+                                 case a: AbsolutePath => Left(s"All modules should be relative paths, but '$a' is absolute")
+                               },
+                            Path(m.replace('.', '/') + ".ibc")
+                              .flatMap {
+                                 case r: RelativePath => Right(r)
+                                 case a: AbsolutePath => Left(s"All modules should be relative paths, but '$a' is absolute")
+                               }
+                          )
                         ).sequence
                        .mapError(errors => s"Some of the modules are incorrect due to:\n${errors.mkString("\n")}")
       _          = println(s"The modules are: $modules")
@@ -184,7 +205,7 @@ object IdrisPackager {
 
   sealed trait Arguments
   object Arguments {
-    case class Create(modulePath: AbsolutePath, targetPath: AbsolutePath) extends Arguments
+    case class Create(idrisPath: AbsolutePath, modulePath: AbsolutePath, targetPath: AbsolutePath) extends Arguments
     case class Idris(idrisPath: AbsolutePath, idrisModules: List[AbsolutePath], idrisArguments: List[String]) extends Arguments
   }
 
@@ -211,13 +232,13 @@ object IdrisPackager {
 
   def parseArguments(arguments: List[String]): R[Arguments] =
     arguments match {
-      case "create" :: modulePathString :: targetPathString :: Nil =>
-        ((modulePathString, "module"), (targetPathString, "target"))
+      case "create" :: idrisPathString :: modulePathString :: targetPathString :: Nil =>
+        ((idrisPathString, "idris"), (modulePathString, "module"), (targetPathString, "target"))
           .map{case (p, d) => toAbsolutePath(p, d)}
           .sequence
           .map {
-             case (modulePath, targetPath) =>
-              Arguments.Create(modulePath, targetPath)
+             case (idrisPath, modulePath, targetPath) =>
+              Arguments.Create(idrisPath, modulePath, targetPath)
            }
           .mapError {errors => errors.mkString("", "\n", "\n") + USAGE}
       case "idris" :: idrisPathString :: idrisArguments =>

@@ -1,5 +1,7 @@
 module MainExample
 
+import InnerModule.Implementation
+
 export
 salute : String
-salute = "Welcome to Idris Rules"
+salute = salutation ++ " to Idris Rules"
