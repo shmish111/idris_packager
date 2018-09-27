@@ -24,8 +24,8 @@ object IdrisPackager {
       for {
         arguments <- parseArguments(argumentStrings)
         _         <- arguments match {
-                       case Arguments.Create(idrisPath, modulePath, targetPath) =>
-                         create(idrisPath, modulePath, targetPath)
+                       case Arguments.Create(idrisPath, modulePath, targetPath, dependencies) =>
+                         create(idrisPath, modulePath, targetPath, dependencies)
                        case Arguments.Idris(idrisPath, idrisModules, idrisArguments) =>
                          runIdris(idrisPath, idrisModules, idrisArguments)
                      }
@@ -41,94 +41,84 @@ object IdrisPackager {
     }
   }
 
-  def runIdris(idrisPath: AbsolutePath, idrisModules: List[AbsolutePath], idrisArguments: List[String]): RU = {
 
-    def findModuleIpkgPath(modulePath: AbsolutePath): Either[String, AbsolutePath] =
-      modulePath
-        .whenDir{dir =>
-           dir.find(raw".*\.ipkg") match {
-             case Right(target :: Nil) => Right(modulePath / target)
-             case Right(Nil) => Left(s"Provided module path '$modulePath' doesn't containt any ipkg file")
-             case Right(_) => Left(s"Provided module path '$modulePath' containts more than one ipkg file and choosing is imposible")
-             case Left(cause) => Left(s"Trying to locate an ipkg file at '$modulePath', something went wrong due to:\n$cause")
-           }
+  private def findModuleIpkgPath(modulePath: AbsolutePath): R[AbsolutePath] =
+    modulePath
+      .whenDir{dir =>
+         dir.find(raw".*\.ipkg") match {
+           case Right(target :: Nil) => Right(modulePath / target)
+           case Right(Nil) => Left(s"Provided module path '$modulePath' doesn't containt any ipkg file")
+           case Right(_) => Left(s"Provided module path '$modulePath' containts more than one ipkg file and choosing is imposible")
+           case Left(cause) => Left(s"Trying to locate an ipkg file at '$modulePath', something went wrong due to:\n$cause")
          }
-        .otherwise {_ =>
-           Left(s"Provided module path '$modulePath' doesn't point to an existing directory")
-         }
+       }
+      .otherwise {_ =>
+         Left(s"Provided module path '$modulePath' doesn't point to an existing directory")
+       }
 
+  private def run(idrisPath: AbsolutePath, pwd: Option[AbsolutePath], args: String*): Unit = {
     import scala.sys.process._
-    println(idrisArguments)
-    println(s"Idris is located at $idrisPath")
-    def run(pwd: Option[AbsolutePath], args: String*): Unit = {
-      val params = Seq(idrisPath.toString) ++ args
-      println("Going to execute: ")
-      println(params.mkString(" "))
-      Process(
-        params,
-        pwd.map(_.toJava.toFile)).!
-      println("Executed")
-      ()
+    val params = Seq(idrisPath.toString) ++ args
+    println("Going to execute: ")
+    println(params.mkString(" "))
+    Process(
+      params,
+      pwd.map(_.toJava.toFile)).!
+    println("Executed")
+    ()
+  }
+
+  private def tempDir: R[AbsolutePath] =
+    resources.temporaryDirectory.mapError(_.toString).run
+
+  private def install(ipzPath: AbsolutePath): R[AbsolutePath] =
+    for {
+      targetModuleExtractionPath <- tempDir
+      _                          <- unzip(ipzPath, targetModuleExtractionPath).mapError(_.toString)
+      ipkgPath                   <- findModuleIpkgPath(targetModuleExtractionPath)
+      content                    <- readUTF8(ipkgPath)
+                                        .mapError(error => s"The content of the file could not be read because: $error")
+      _                           = println(s"The content of the file is:\n$content")
+      ipkgMeta                   <- parse(content)
+                                        .mapError(errors => s"The content could not be parsed due to:\n${errors.mkString("\n")}")
+      sourcedir                  <- ipkgMeta
+                                        .sourcedir
+                                        .getOrElse(Path.dot) match {
+                                           case r: RelativePath => Right(r)
+                                           case a: AbsolutePath => Left(s"Only relative sourcedirs are accepted, but the module has '$a' configured")
+                                         }
+    } yield {
+      targetModuleExtractionPath / sourcedir
     }
 
-    def runLocal(args: String*): Unit =
-      run(None, args :_*)
-
-    def tempDir: Either[String, AbsolutePath] =
-      resources.temporaryDirectory.mapError(_.toString).run
-
-    def install(ipzPath: AbsolutePath): Either[String, AbsolutePath] =
-      for {
-        targetModuleExtractionPath <- tempDir
-        _                          <- unzip(ipzPath, targetModuleExtractionPath).mapError(_.toString)
-        ipkgPath                   <- findModuleIpkgPath(targetModuleExtractionPath)
-        content                    <- readUTF8(ipkgPath)
-                                          .mapError(error => s"The content of the file could not be read because: $error")
-        _                           = println(s"The content of the file is:\n$content")
-        ipkgMeta                   <- parse(content)
-                                          .mapError(errors => s"The content could not be parsed due to:\n${errors.mkString("\n")}")
-        sourcedir                  <- ipkgMeta
-                                          .sourcedir
-                                          .getOrElse(Path.dot) match {
-                                             case r: RelativePath => Right(r)
-                                             case a: AbsolutePath => Left(s"Only relative sourcedirs are accepted, but the module has '$a' configured")
-                                           }
-      } yield {
-        targetModuleExtractionPath / sourcedir
-      }
+  def runIdris(idrisPath: AbsolutePath, idrisModules: List[AbsolutePath], idrisArguments: List[String]): RU = {
+    println(s"Idris is located at $idrisPath")
 
     for {
       installedModules  <-  idrisModules.map(install).sequence.mapError(es => es.mkString("\n"))
     } yield {
       val imSearchPaths = installedModules.flatMap(m => List("-i", m.toString))
-      runLocal((imSearchPaths ++ idrisArguments) :_*)
+      run(idrisPath, None, (imSearchPaths ++ idrisArguments) :_*)
       ()
     }
 
   }
 
-  def create(idrisPath: AbsolutePath, modulePath: AbsolutePath, target: AbsolutePath): RU = {
+  def create(idrisPath: AbsolutePath, modulePath: AbsolutePath, target: AbsolutePath, dependencies: List[AbsolutePath]): RU = {
 
     println(s"\n The path is: $modulePath")
+    println(dependencies)
 
     println(s"Idris is located at $idrisPath")
-    def run(pwd: AbsolutePath, args: String*): Unit = {
-      import scala.sys.process._
-      val params = Seq(idrisPath.toString) ++ args
-      println("Going to execute: ")
-      println(params.mkString(" "))
-      Process(
-        params,
-        Some(pwd.toJava.toFile)).!
-      println("Executed")
-      ()
-    }
 
     for {
 
       root      <- modulePath.parent
                        .toRight(s"The package file at '$modulePath' seems to have no parent")
-      _          = run(root, "--build", modulePath.toString)
+      modules   <- dependencies.map(install).sequence.mapError(es => es.mkString("\n"))
+      modPaths   = modules.flatMap(m => List("-i", m.toString))
+      extraArgs  = List("--build", modulePath.toString) ++ modPaths
+      _          = run(idrisPath, Some(root), extraArgs :_*)
 
       content   <- readUTF8(modulePath)
                        .mapError(error => s"The content of the file could not be read because: $error")
@@ -205,7 +195,7 @@ object IdrisPackager {
 
   sealed trait Arguments
   object Arguments {
-    case class Create(idrisPath: AbsolutePath, modulePath: AbsolutePath, targetPath: AbsolutePath) extends Arguments
+    case class Create(idrisPath: AbsolutePath, modulePath: AbsolutePath, targetPath: AbsolutePath, idrisModules: List[AbsolutePath]) extends Arguments
     case class Idris(idrisPath: AbsolutePath, idrisModules: List[AbsolutePath], idrisArguments: List[String]) extends Arguments
   }
 
@@ -231,26 +221,25 @@ object IdrisPackager {
   }
 
   def parseArguments(arguments: List[String]): R[Arguments] =
-    arguments match {
-      case "create" :: idrisPathString :: modulePathString :: targetPathString :: Nil =>
-        ((idrisPathString, "idris"), (modulePathString, "module"), (targetPathString, "target"))
-          .map{case (p, d) => toAbsolutePath(p, d)}
-          .sequence
-          .map {
-             case (idrisPath, modulePath, targetPath) =>
-              Arguments.Create(idrisPath, modulePath, targetPath)
-           }
-          .mapError {errors => errors.mkString("", "\n", "\n") + USAGE}
-      case "idris" :: idrisPathString :: idrisArguments =>
-        toAbsolutePath(idrisPathString, "idris")
-          .flatMap { case idrisPath =>
-             extractListOfModules(idrisArguments)
-               .map{case (mods, args) =>
-                  Arguments.Idris(idrisPath, mods, args)
-                }
-           }
-      case _ =>
-        Left("Wrong arguments\n" + USAGE)
+    extractListOfModules(arguments).flatMap{case (mods, restOfArgs) =>
+      restOfArgs match {
+        case "create" :: idrisPathString :: modulePathString :: targetPathString :: Nil =>
+          ((idrisPathString, "idris"), (modulePathString, "module"), (targetPathString, "target"))
+            .map{case (p, d) => toAbsolutePath(p, d)}
+            .sequence
+            .map {
+               case (idrisPath, modulePath, targetPath) =>
+                Arguments.Create(idrisPath, modulePath, targetPath, mods)
+             }
+            .mapError {errors => errors.mkString("", "\n", "\n") + USAGE}
+        case "idris" :: idrisPathString :: idrisArguments =>
+          toAbsolutePath(idrisPathString, "idris")
+            .map { case idrisPath =>
+                Arguments.Idris(idrisPath, mods, idrisArguments)
+             }
+        case _ =>
+          Left("Wrong arguments\n" + USAGE)
+      }
     }
 
   val USAGE =
