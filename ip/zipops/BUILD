@@ -5,11 +5,10 @@ scala_library(
     srcs = glob(["*.scala"]),
     deps = [
       "//ip/runnablestream:runnablestream",
-      "//ip/eitherops:eitherops",
       "//ip/resources:resources",
       "//ip/fileops/path:path",
       "//ip/fileops:fileops",
-      "//ip/resource:resource"],
+      "//ip/result:result"],
     visibility = ["//visibility:public"]
 )
 

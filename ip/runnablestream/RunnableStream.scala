@@ -1,6 +1,6 @@
 package ip.runnablestream
 
-import ip.resource._
+import ip.result._
 
 trait RunnableStream[E, T] { self =>
   def next: Either[E, Option[T]]
@@ -46,12 +46,12 @@ trait RunnableStream[E, T] { self =>
       }
     }
 
-  def mapFalible[F, U](f: T => Either[F, U]): RunnableStream[Either[E, F], U] =
+  def mapFalible[F, U](f: T => Result[F, U]): RunnableStream[Either[E, F], U] =
     new RunnableStream[Either[E, F], U] {
       def next: Either[Either[E, F], Option[U]] =
         self.next match {
           case Right(Some(t)) =>
-            f(t) match {
+            f(t).run match {
               case Right(u) => Right(Some(u))
               case Left(e) => Left(Right(e))
             }
@@ -76,14 +76,14 @@ trait RunnableStream[E, T] { self =>
     def apply(): Either[E, Unit] =
       foreach(_ => ())
 
-    def asResource: Resource[E, Unit] = {
+    def asResult: Result[E, Unit] = {
       def generate: Either[E, Unit] =
         next match {
           case Left(e) => Left(e)
           case Right(None) => Right(())
           case Right(_) => generate
         }
-      Resource.create(generate, clean _)
+      Result.create(generate, clean _)
     }
   }
 }

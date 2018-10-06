@@ -4,10 +4,9 @@ scala_binary(
     name = "idrisPackager",
     srcs = glob(["*.scala"]),
     deps = [
-      "//ip/resource:resource",
+      "//ip/result:result",
       "//ip/resources:resources",
       "//ip/tupleops:tupleops",
-      "//ip/eitherops:eitherops",
       "//ip/zipops:zipops",
       "//ip/fileops:fileops",
       "//ip/ipkgops:ipkgops",

@@ -1,6 +1,7 @@
 package ip.fileops
 package path
 
+import ip.result._
 import java.nio.file.{
   Path  => JPath,
   Paths => JPaths,
@@ -17,10 +18,10 @@ sealed trait Path {
 
   def parent: Option[SELF]
 
-  def / (other: String): Either[Path.PathConcatenationError, SELF] = {
+  def / (other: String): Result[Path.PathConcatenationError, SELF] = {
     Path(other).flatMap{
-      case _: AbsolutePath => Left(Path.NotRelative(other))
-      case r: RelativePath => Right(this / r)
+      case _: AbsolutePath => Result.failure(Path.NotRelative(other))
+      case r: RelativePath => Result.success(this / r)
     }
   }
 
@@ -76,11 +77,11 @@ object Path {
       if (jpath.isAbsolute) new AbsolutePath(jpath)
     else                    new RelativePath(jpath)
 
-  def apply(input: String): Either[PathFormatError, Path] = {
-    try {  Right(apply(JPaths.get(input).normalize))  }
+  def apply(input: String): Result[PathFormatError, Path] = {
+    try {  Result.success(apply(JPaths.get(input).normalize))  }
     catch {
       case ex: InvalidPathException =>
-        Left(Invalid(input, ex.getReason, Option(ex.getIndex).filter(_ >= 0)))
+        Result.failure(Invalid(input, ex.getReason, Option(ex.getIndex).filter(_ >= 0)))
     }
   }
 }

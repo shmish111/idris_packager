@@ -1,7 +1,7 @@
 package ip
 
 import ip.fileops.path._
-import ip.resource._
+import ip.result._
 import ip.runnablestream._
 
 import scala.util.{Failure, Success, Try}
@@ -17,12 +17,12 @@ package object zipops extends Zip
                          with Unzip {
 
   implicit class ZipOutputStreamOps(val zos: ZipOutputStream) extends AnyVal {
-    def put(name: RelativePath, content: InputStream): Resource[PutToZipError, Unit] = {
-      Resource
+    def put(name: RelativePath, content: InputStream): RUnit[PutToZipError] = {
+      Result
         .success(Try{new ZipEntry(name.toString)})
         .flatMap {
-            case Success(ze) => Resource.success(ze)
-            case Failure(f)  => Resource.failure(PutToZipError.IncorrectEntryName(f))
+            case Success(ze) => Result.success(ze)
+            case Failure(f)  => Result.failure(PutToZipError.IncorrectEntryName(f))
          }
         .flatMap {ze =>
            try {
@@ -33,11 +33,11 @@ package object zipops extends Zip
                zos.write(bytes, 0, length);
                length = content.read(bytes)
              }
-             Resource.success(())
+             Result.success(())
            }
            catch {
-             case e: JZipException => Resource.failure(PutToZipError.ZipException(e))
-             case e: JIOException  => Resource.failure(PutToZipError.IOException(e))
+             case e: JZipException => Result.failure(PutToZipError.ZipException(e))
+             case e: JIOException  => Result.failure(PutToZipError.IOException(e))
            }
          }
     }

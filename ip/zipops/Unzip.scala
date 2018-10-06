@@ -1,10 +1,9 @@
 package ip.zipops
 
-import ip.eitherops._
 import ip.fileops.path.AbsolutePath
 import ip.fileops.path.Path.PathConcatenationError
 import ip.fileops.DirCreationError
-import ip.resource._
+import ip.result._
 import ip.resources
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
@@ -14,16 +13,14 @@ import java.io.FileNotFoundException
 
 trait Unzip {
 
-  private def extractEntry(zis: ZipInputStream, target: AbsolutePath)(zipEntry: ZipEntry): Either[ZipEntryExtractionError, Unit] = {
+  private def extractEntry(zis: ZipInputStream, target: AbsolutePath)(zipEntry: ZipEntry): Result[ZipEntryExtractionError, Unit] = {
     val fileName = zipEntry.getName
     val buffer = new Array[Byte](1024)
-    val r =
       for {
-        path <- (target / fileName).mapError(e => ZipEntryExtractionError.TargetFilePathCanNotBeConstructed(target, fileName, e)).asResource
+        path <- (target / fileName).mapError(e => ZipEntryExtractionError.TargetFilePathCanNotBeConstructed(target, fileName, e))
         _    <- path
                   .makeParents
-                  .map((e: Either[DirCreationError, Boolean]) => Resource(e))
-                  .getOrElse( Resource.success(()) )
+                  .getOrElse( Result.success(()) )
                   .mapError[ZipEntryExtractionError](e => ZipEntryExtractionError.ParentsOfTargetCouldNotBeCreated(path, e))
         _    <- resources
                   .fileOutputStream(path)
@@ -38,21 +35,20 @@ trait Unzip {
                          fos.write(buffer, 0, len)
                          len = zis.read(buffer)
                        }
-                       Resource.success(())
+                       Result.success(())
                      }
                      catch {
-                       case e: JZipException => Resource.failure(ZipEntryExtractionError.ZipException(e))
-                       case e: JIOException  => Resource.failure(ZipEntryExtractionError.IOException(e))
+                       case e: JZipException => Result.failure(ZipEntryExtractionError.ZipException(e))
+                       case e: JIOException  => Result.failure(ZipEntryExtractionError.IOException(e))
                      }
                    }
       } yield
         ()
-    r.run()
   }
 
-  def unzip(source: AbsolutePath, target: AbsolutePath): EUnit[UnzipError] = {
+  def unzip(source: AbsolutePath, target: AbsolutePath): Result[UnzipError, Unit] = {
 
-    type R[+T] = Resource[UnzipError, T]
+    type R[+T] = Result[UnzipError, T]
     type RU = R[Unit]
 
     def impl: RU =
@@ -69,7 +65,8 @@ trait Unzip {
                     zis
                       .asRunnableStream
                       .mapFalible(extractEntry(zis, target))
-                      .run.asResource
+                      .run()
+                      .asResult
                       .mapError {
                          case Left(gze) => UnzipError.GetZipEntryError(source, gze)
                          case Right(zee) => UnzipError.ZipEntryExtractionError(source, zee)
@@ -82,11 +79,11 @@ trait Unzip {
 
     source.whenFile{_ =>
        target.whenDir{_ =>
-          impl.run
+          impl
        }
-       .otherwise {_ => Left( UnzipError.TargetDoesNotExistOrNotADir(target) ) }
+       .otherwise {_ => Result.failure( UnzipError.TargetDoesNotExistOrNotADir(target) ) }
     }
-    .otherwise {_ => Left( UnzipError.SourceDoesNotExistOrNotAFile(source) ) }
+    .otherwise {_ => Result.failure( UnzipError.SourceDoesNotExistOrNotAFile(source) ) }
   }
 
 }

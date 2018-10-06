@@ -1,10 +1,11 @@
 package ip
 
 import ip.fileops.path._
+import ip.result._
 
 package object ipkgops {
 
-  def parse(input: String): Either[List[ParseError], IpkgMeta] = {
+  def parse(input: String): Result[List[ParseError], IpkgMeta] = {
 
     def parsePackage(line: String): Option[String] = {
       val base = line.trim
@@ -32,7 +33,7 @@ package object ipkgops {
         .filterNot(_._1.isEmpty)
 
     lines match {
-      case Nil => Left(List(ParseError.EmptyIpkgFile))
+      case Nil => Result.failure(List(ParseError.EmptyIpkgFile))
       case pkg :: entryCandidates =>
         val pkgcandidate = parsePackage(pkg._1)
         val pkgParsingErrors =
@@ -56,27 +57,27 @@ package object ipkgops {
 
             lookup.get("modules") match {
               case None =>
-                Left(List(ParseError.MissingModulesSetting))
+                Result.failure(List(ParseError.MissingModulesSetting))
               case Some(modules) =>
                 lookup.get("sourcedir") match {
                   case None =>
-                    Right(IpkgMeta(packageName, None, modules.split(",").toList.map(_.trim)))
+                    Result.success(IpkgMeta(packageName, None, modules.split(",").toList.map(_.trim)))
                   case Some(sourcedir) =>
-                    Path(sourcedir) match {
+                    Path(sourcedir) transform {
                       case Right(path) =>
-                        Right(IpkgMeta(packageName, Some(path), modules.split(",").toList.map(_.trim)))
+                        Result.success(IpkgMeta(packageName, Some(path), modules.split(",").toList.map(_.trim)))
                       case Left(pathParsingError) =>
                         val (_, line) =
                           lines
                             .filter(_._1.matches("^\\s*sourcedir\\s*="))
                             .reverse
                             .head
-                        Left(List(ParseError.InvalidSourcedirPath(line, pathParsingError)))
+                        Result.failure(List(ParseError.InvalidSourcedirPath(line, pathParsingError)))
                     }
                 }
             }
           case (_, _) =>
-            Left(errors)
+            Result.failure(errors)
         }
     }
   }

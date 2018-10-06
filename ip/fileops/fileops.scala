@@ -3,6 +3,7 @@ package ip
 import java.nio.file.{Files => JFiles}
 
 import ip.fileops.path._
+import ip.result._
 
 package fileops {
 
@@ -26,36 +27,36 @@ package fileops {
  
   sealed trait FileSystemRef{val path: AbsolutePath}
   case class FileRef    (path: AbsolutePath) extends FileSystemRef {
-    def rm: Either[FileRemoveError, Unit] =
+    def rm: Result[FileRemoveError, Unit] =
       try {
         path.toJava.toFile.delete
-        Right(())
+        Result.success(())
       } catch {
         case e: java.lang.SecurityException =>
-          Left(FileRemoveError.JavaSecurityException(e))
+          Result.failure(FileRemoveError.JavaSecurityException(e))
       }
   }
 
   case class DirRef     (path: AbsolutePath) extends FileSystemRef {
-    def mkdirs: Either[DirCreationError, Boolean] =
+    def mkdirs: Result[DirCreationError, Boolean] =
       try {
-        Right(path.toJava.toFile.mkdirs)
+        Result.success(path.toJava.toFile.mkdirs)
       } catch {
         case e: java.lang.SecurityException =>
-          Left(DirCreationError.JavaSecurityException(e))
+          Result.failure(DirCreationError.JavaSecurityException(e))
       }
-    def list: Either[DirListError, List[RelativePath]] = {
+    def list: Result[DirListError, List[RelativePath]] = {
       try {
         val listOfFiles = path.toJava.toFile.listFiles.toList
 
-        Right( listOfFiles.map(f => new RelativePath(f.toPath)))
+        Result.success( listOfFiles.map(f => new RelativePath(f.toPath)))
       }
       catch {
         case otherwise: Throwable =>
           throw otherwise
       }
     }
-    def find(regexFilenamePattern: String): Either[DirListError, List[RelativePath]] = {
+    def find(regexFilenamePattern: String): Result[DirListError, List[RelativePath]] = {
       val regex = regexFilenamePattern.r
       list
         .map{
@@ -71,19 +72,19 @@ package fileops {
   }
 
   case class NothingRef (path: AbsolutePath) extends FileSystemRef {
-    def mkdir: Either[DirCreationError, Boolean] =
+    def mkdir: Result[DirCreationError, Boolean] =
         try {
-          Right(path.toJava.toFile.mkdir)
+          Result.success(path.toJava.toFile.mkdir)
         } catch {
           case e: java.lang.SecurityException =>
-            Left(DirCreationError.JavaSecurityException(e))
+            Result.failure(DirCreationError.JavaSecurityException(e))
         }
-    def mkdirs: Either[DirCreationError, Boolean] =
+    def mkdirs: Result[DirCreationError, Boolean] =
         try {
-          Right(path.toJava.toFile.mkdirs)
+          Result.success(path.toJava.toFile.mkdirs)
         } catch {
           case e: java.lang.SecurityException =>
-            Left(DirCreationError.JavaSecurityException(e))
+            Result.failure(DirCreationError.JavaSecurityException(e))
         }
   }
 
@@ -139,17 +140,17 @@ package fileops {
 
 package object fileops {
 
-  def readUTF8(path: AbsolutePath): Either[ReadError, String] =
+  def readUTF8(path: AbsolutePath): Result[ReadError, String] =
     readAllBytes(path).map(new String(_, "UTF-8"))
 
 
-  def readAllBytes(path: AbsolutePath): Either[ReadError, Array[Byte]] =
+  def readAllBytes(path: AbsolutePath): Result[ReadError, Array[Byte]] =
     try {
-      Right(JFiles.readAllBytes(path.toJava))
+      Result.success(JFiles.readAllBytes(path.toJava))
     }
     catch {
       case t: Throwable =>
-        Left(ReadError(path, t))
+        Result.failure(ReadError(path, t))
     }
 
   implicit class FileSystemOps(val path: AbsolutePath) extends AnyVal {
@@ -168,11 +169,11 @@ package object fileops {
     def isFile: Boolean =
       path.toJava.toFile.isFile
 
-    def makeParents : Option[Either[DirCreationError, Boolean]] = {
+    def makeParents : Option[Result[DirCreationError, Boolean]] = {
       path.parent map {p =>
         p.whenDir     (_.mkdirs)
          .whenNothing (_.mkdirs)
-         .whenFile    (_ => Left(DirCreationError.ItsAFile(p)))
+         .whenFile    (_ => Result.failure(DirCreationError.ItsAFile(p)))
       }
     }
   }

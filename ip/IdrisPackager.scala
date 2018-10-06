@@ -1,17 +1,17 @@
 package ip
 
-import ip.eitherops._
 import ip.fileops._
 import ip.fileops.path._
 import ip.ipkgops._
 import ip.zipops._
 import ip.tupleops._
+import ip.result._
 
 object IdrisPackager {
 
-  type R[+T] = Either[String, T]
-  type RU = EUnit[String]
-  val RU: RU = Right(())
+  type R[+T] = Result[String, T]
+  type RU = RUnit[String]
+  val RU: RU = Result.success(())
 
   def main(args: Array[String]): Unit = {
 
@@ -35,7 +35,7 @@ object IdrisPackager {
       }
 
 
-    result match {
+    result.run match {
       case Left(error) => println(error)
       case _ =>
     }
@@ -45,15 +45,15 @@ object IdrisPackager {
   private def findModuleIpkgPath(modulePath: AbsolutePath): R[AbsolutePath] =
     modulePath
       .whenDir{dir =>
-         dir.find(raw".*\.ipkg") match {
-           case Right(target :: Nil) => Right(modulePath / target)
-           case Right(Nil) => Left(s"Provided module path '$modulePath' doesn't containt any ipkg file")
-           case Right(_) => Left(s"Provided module path '$modulePath' containts more than one ipkg file and choosing is imposible")
-           case Left(cause) => Left(s"Trying to locate an ipkg file at '$modulePath', something went wrong due to:\n$cause")
+         dir.find(raw".*\.ipkg") transform {
+           case Right(target :: Nil) => Result.success(modulePath / target)
+           case Right(Nil) => Result.failure(s"Provided module path '$modulePath' doesn't containt any ipkg file")
+           case Right(_) => Result.failure(s"Provided module path '$modulePath' containts more than one ipkg file and choosing is imposible")
+           case Left(cause) => Result.failure(s"Trying to locate an ipkg file at '$modulePath', something went wrong due to:\n$cause")
          }
        }
       .otherwise {_ =>
-         Left(s"Provided module path '$modulePath' doesn't point to an existing directory")
+         Result.failure(s"Provided module path '$modulePath' doesn't point to an existing directory")
        }
 
   private def run(idrisPath: AbsolutePath, pwd: Option[AbsolutePath], args: String*): Unit = {
@@ -69,7 +69,7 @@ object IdrisPackager {
   }
 
   private def tempDir: R[AbsolutePath] =
-    resources.temporaryDirectory.mapError(_.toString).run
+    resources.temporaryDirectory.mapError(_.toString)
 
   private def install(ipzPath: AbsolutePath): R[AbsolutePath] =
     for {
@@ -84,8 +84,8 @@ object IdrisPackager {
       sourcedir                  <- ipkgMeta
                                         .sourcedir
                                         .getOrElse(Path.dot) match {
-                                           case r: RelativePath => Right(r)
-                                           case a: AbsolutePath => Left(s"Only relative sourcedirs are accepted, but the module has '$a' configured")
+                                           case r: RelativePath => Result.success(r)
+                                           case a: AbsolutePath => Result.failure(s"Only relative sourcedirs are accepted, but the module has '$a' configured")
                                          }
     } yield {
       targetModuleExtractionPath / sourcedir
@@ -114,7 +114,7 @@ object IdrisPackager {
     for {
 
       root      <- modulePath.parent
-                       .toRight(s"The package file at '$modulePath' seems to have no parent")
+                       .toSuccess(s"The package file at '$modulePath' seems to have no parent")
       modules   <- dependencies.map(install).sequence.mapError(es => es.mkString("\n"))
       modPaths   = modules.flatMap(m => List("-i", m.toString))
       extraArgs  = List("--build", modulePath.toString) ++ modPaths
@@ -138,16 +138,16 @@ object IdrisPackager {
                           println(s"'$target' is an existing file and is going to be deleted")
                           f.rm
                            .mapError(error => s"'$target' already exists and can't be deleted due to '$error'") }
-                       .whenDir{ d => Left(s"'$target' is a directory and a file can't be created there") }
+                       .whenDir{ d => Result.failure(s"'$target' is a directory and a file can't be created there") }
                        .whenNothing{ _ => RU }
       _         <- target.makeParents
                        .map(_.mapError(error => s"target directory could not be created, due to: $error"))
-                       .toRight("Target directory could not be created because, for some reason, the target file has no parent")
+                       .toSuccess("Target directory could not be created because, for some reason, the target file has no parent")
                        .flatMap(identity)
       _          = println(s"The root of the zip file is going to be picked up from '$root'")
 
       ipkgFile  <- modulePath.last
-                       .toRight(s"The package file at '$modulePath' seems to have no name")
+                       .toSuccess(s"The package file at '$modulePath' seems to have no name")
       _          = println(s"The name of the ipkg file is: $ipkgFile")
 
       modules   <- ipkgMeta
@@ -156,13 +156,13 @@ object IdrisPackager {
                           List(
                             Path(m.replace('.', '/') + ".idr")
                               .flatMap {
-                                 case r: RelativePath => Right(r)
-                                 case a: AbsolutePath => Left(s"All modules should be relative paths, but '$a' is absolute")
+                                 case r: RelativePath => Result.success(r)
+                                 case a: AbsolutePath => Result.failure(s"All modules should be relative paths, but '$a' is absolute")
                                },
                             Path(m.replace('.', '/') + ".ibc")
                               .flatMap {
-                                 case r: RelativePath => Right(r)
-                                 case a: AbsolutePath => Left(s"All modules should be relative paths, but '$a' is absolute")
+                                 case r: RelativePath => Result.success(r)
+                                 case a: AbsolutePath => Result.failure(s"All modules should be relative paths, but '$a' is absolute")
                                }
                           )
                         ).sequence
@@ -172,8 +172,8 @@ object IdrisPackager {
       sourcedir <- ipkgMeta
                        .sourcedir
                        .getOrElse(Path.dot) match {
-                          case r: RelativePath => Right(r)
-                          case a: AbsolutePath => Left(s"Only relative sourcedirs are accepted, but the module has '$a' configured")
+                          case r: RelativePath => Result.success(r)
+                          case a: AbsolutePath => Result.failure(s"Only relative sourcedirs are accepted, but the module has '$a' configured")
                         }
 
       content    = ipkgFile :: modules.map(mod => sourcedir / mod)
@@ -238,7 +238,7 @@ object IdrisPackager {
                 Arguments.Idris(idrisPath, mods, idrisArguments)
              }
         case _ =>
-          Left("Wrong arguments\n" + USAGE)
+          Result.failure("Wrong arguments\n" + USAGE)
       }
     }
 

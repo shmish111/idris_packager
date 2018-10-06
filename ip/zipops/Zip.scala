@@ -1,17 +1,15 @@
 package ip.zipops
 
 import ip.fileops.path._
-import ip.resource._
-import ip.eitherops.EUnit
+import ip.result._
 import ip.resources
 
 
 
 trait Zip {
 
-  def zip(target: AbsolutePath, root: AbsolutePath, content: List[RelativePath]): EUnit[ZipError] = {
+  def zip(target: AbsolutePath, root: AbsolutePath, content: List[RelativePath]): RUnit[ZipError] = {
 
-    val result: RUnit[ZipError] =
       for {
         targetPath      <- target
                              .when(! _.exists)
@@ -53,7 +51,6 @@ trait Zip {
         ()
       }
 
-    result.run
 
   }
 
