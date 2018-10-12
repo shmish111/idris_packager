@@ -6,6 +6,7 @@ import ip.ipkgops._
 import ip.zipops._
 import ip.tupleops._
 import ip.result._
+import ip.logger.Logger
 
 object IdrisPackager {
 
@@ -16,6 +17,9 @@ object IdrisPackager {
   def main(args: Array[String]): Unit = {
 
     println()
+
+    implicit val log: Logger =
+      ip.logger.Logger.Console.trace
 
     val argumentStrings =
       args.toList
@@ -36,7 +40,7 @@ object IdrisPackager {
 
 
     result.run match {
-      case Left(error) => println(error)
+      case Left(error) => log.error(error)
       case _ =>
     }
   }
