@@ -5,7 +5,9 @@ scala_library(
     srcs = glob(["*.scala"]),
     deps = [
       "//ip/fileops/path:path",
-      "//ip/result:result"],
+      "//ip/result:result",
+      "//ip/terminate:terminate",
+      "//ip/codereporting:codereporting"],
     visibility = ["//visibility:public"]
 )
 

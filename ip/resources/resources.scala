@@ -16,6 +16,8 @@ import ip.fileops.path._
 
 import scala.util.{Failure, Success, Try}
 
+import ip.terminate._
+
 package object resources {
 
   type ||[A, B] = Either[A, B]
@@ -27,7 +29,7 @@ package object resources {
          case Success(fos)                        => Result.create(Right(fos), () => fos.close())
          case Failure(e: FileNotFoundException)   => Result.create(Left(Left(e)), () => ())
          case Failure(e: SecurityException)       => Result.create(Left(Right(e)), () => ())
-         case Failure(e)                          => throw new RuntimeException("Unexpected exception generating a FileOutputStream", e)
+         case Failure(e)                          => fatal("Trying to create a 'FileOutputStream', the JVM has thrown an undocumented exception", e)
        }
 
   def fileInputStream(path: AbsolutePath): Result[FileNotFoundException || SecurityException, FileInputStream] =
@@ -37,7 +39,7 @@ package object resources {
          case Success(fis)                        => Result.create(Right(fis), () => fis.close())
          case Failure(e: FileNotFoundException)   => Result.create(Left(Left(e)), () => ())
          case Failure(e: SecurityException)       => Result.create(Left(Right(e)), () => ())
-         case Failure(e)                          => throw new RuntimeException("Unexpected exception generating a FileInputStream", e)
+         case Failure(e)                          => fatal("Trying to create a 'FileInputStream', the JVM has thrown an undocumented exception", e)
        }
 
   def zipOutputStream(os: OutputStream): Result[Nothing, ZipOutputStream] = {
@@ -55,13 +57,18 @@ package object resources {
       case Success(jpath)                 =>
         Path(jpath) match {
           case _: RelativePath =>
-            throw new RuntimeException("The JVM has returned, unexpectedly, a non absolute path from a method that should always return one")
+            impossible(
+              s"""|The invocation 'Files.createTempDirectory(null)', should always return an
+                  |absolute path, but, for some reason, we have detected it's response
+                  |'$jpath' as a relative one instead""".stripMargin)
           case ap: AbsolutePath =>
             Result.create(Right(ap), () => ())
         }
       case Failure(e: IOException)        => Result.create(Left(Left(e)), () => ())
       case Failure(e: SecurityException)  => Result.create(Left(Right(e)), () => ())
-      case Failure(e)                     => throw new RuntimeException("Unexpected exception generating a temporary directory", e)
+      case Failure(e)                     => fatal("""|Trying to generate a temporal directory with
+                                                      |'Files.createTempDirectory(null)', the JVM has thrown
+                                                      |an undocumented exception""".stripMargin, e)
     }
   }
 }
