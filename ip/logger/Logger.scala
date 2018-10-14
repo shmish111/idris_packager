@@ -1,6 +1,7 @@
 package ip.logger
 
 import annotation.implicitNotFound
+import ip.terminate._
 
 @implicitNotFound(msg = """Cannot find a Logger in scope.
 Please add a Logger implicit parameter to the wrapping function or,
@@ -25,8 +26,7 @@ object Logger {
           println(s"$first$h")
           t.foreach(l => println(s"$rest$l"))
         case _ =>
-          println(s"IMPOSSIBLE: splitting the string '$message', should never result into an empty string")
-          sys.exit(1)
+          impossible(s"Splitting the string '$message', should never result into an empty string")
       }
     }
 

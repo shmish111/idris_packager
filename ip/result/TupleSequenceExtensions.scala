@@ -1,5 +1,7 @@
 package ip.result
 
+import ip.terminate._
+
 trait TupleSequenceExtensions {
   implicit class TupleSequenceExtension2[A, B, E, F](tup: (Result[E, A], Result[F, B])) {
     def combine: Result[Nothing, (Either[E, A], Either[F, B])] =
@@ -18,8 +20,14 @@ trait TupleSequenceExtensions {
     def combine: Result[Nothing, (Either[E, A], Either[F, B], Either[G, C])] =
       (tup._1 combine tup._2 combine tup._3).map {
         case (Right((a, b)), c) => (a, b, c)
-        case _ =>
-          throw new RuntimeException("This will never happen, because there is 'Nothing' on 'Left'")
+        case (Left(_ /* : Nothing */), _) =>
+          impossible(
+            """|The type of
+               |  tup._1 combine tup._2 combine tup._3
+               |is
+               |  Result[Nothing,(Either[Nothing,(Either[E,A], Either[F,B])], Either[G,C])]
+               |which means that in the Left of a successful result, there is Nothing.
+               |Which is impossible""".stripMargin)
       }
   }
   implicit class SameErrorTupleSequenceExtension3[A, B, C, E](tup: (Result[E, A], Result[E, B], Result[E, C])) {

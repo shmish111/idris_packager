@@ -107,5 +107,3 @@ package object result extends TupleSequenceExtensions {
   }
 
 }
-
-

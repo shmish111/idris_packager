@@ -104,9 +104,6 @@ object Result {
   def apply[E, A](func: => Either[E, A]): Result[E, A] =
     Result.create[E, A]  ( func, () => ())
 
-  def cleanup(func: () => Any): Result[Nothing, Nothing] =
-    Result.create[Nothing, Nothing]  ( throw new Exception("Gen function missing"), func)
-
   def success[A](func: => A): Result[Nothing, A] =
     Result.create[Nothing, A] ( Right(func), () => ())
 
@@ -115,13 +112,3 @@ object Result {
 
 }
 
-case class WhenHolder[T](t: T, p: T => Boolean) {
-
-  def orFailWith[E](f: T => E): Result[E, T] =
-    if   (p(t)) Result( Right(t) )
-    else        Result( Left(f(t)) )
-
-  def orFail[E](e: E): Result[E, T] =
-    orFailWith(_ => e)
-
-}
