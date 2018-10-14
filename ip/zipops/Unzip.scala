@@ -1,7 +1,7 @@
 package ip.zipops
 
 import ip.fileops.path.AbsolutePath
-import ip.fileops.path.Path.PathConcatenationError
+import ip.fileops.path.Path
 import ip.fileops.DirCreationError
 import ip.result._
 import ip.resources
@@ -93,7 +93,7 @@ object ZipEntryExtractionError {
   case class TargetFilePathCanNotBeConstructed(
     targetRoot: AbsolutePath,
     fileName: String,
-    error: PathConcatenationError)            extends ZipEntryExtractionError
+    error: Path.ConcatenationError)           extends ZipEntryExtractionError
   case class ZipException(e: JZipException)   extends ZipEntryExtractionError
   case class IOException(e: JIOException)     extends ZipEntryExtractionError
   case class TargetFileUnnaccessible(

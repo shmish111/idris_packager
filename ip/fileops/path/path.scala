@@ -2,6 +2,8 @@ package ip.fileops
 package path
 
 import ip.result._
+import ip.describe._
+import ip.terminate._
 import java.nio.file.{
   Path  => JPath,
   Paths => JPaths,
@@ -18,9 +20,9 @@ sealed trait Path {
 
   def parent: Option[SELF]
 
-  def / (other: String): Result[Path.PathConcatenationError, SELF] = {
+  def / (other: String): Result[Path.ConcatenationError, SELF] = {
     Path(other).flatMap{
-      case _: AbsolutePath => Result.failure(Path.NotRelative(other))
+      case _: AbsolutePath => Result.failure(Path.NotRelative(toJava.toString, other))
       case r: RelativePath => Result.success(this / r)
     }
   }
@@ -66,23 +68,63 @@ object Path {
   lazy val current: AbsolutePath =
     new AbsolutePath(JPaths.get(".").toAbsolutePath.normalize)
 
-  sealed trait PathConcatenationError
-
-  sealed trait PathFormatError extends PathConcatenationError
-  case class Invalid(input: String, reason: String, index: Option[Int]) extends PathFormatError
-
-  case class NotRelative(input: String) extends PathConcatenationError
-
   def apply(jpath: JPath): Path =
       if (jpath.isAbsolute) new AbsolutePath(jpath)
     else                    new RelativePath(jpath)
 
-  def apply(input: String): Result[PathFormatError, Path] = {
-    try {  Result.success(apply(JPaths.get(input).normalize))  }
-    catch {
-      case ex: InvalidPathException =>
+  def apply(input: String): Result[FormatError, Path] = {
+    import scala.util.Try
+    import scala.util.Success
+    import scala.util.Failure
+
+    Try{JPaths.get(input)} match {
+      case Success(jp) =>
+        Result.success(apply(jp.normalize))
+      case Failure(ex: InvalidPathException) =>
         Result.failure(Invalid(input, ex.getReason, Option(ex.getIndex).filter(_ >= 0)))
+      case Failure(t: Throwable) =>
+        fatal("Trying to parse a 'Path`, the JVM has thrown an undocumented exception", t)
     }
   }
+
+//                                                                                  //
+// Errors
+// ________________________________________________________________________________ //
+
+  sealed trait ConcatenationError {
+    def description: String
+  }
+  object ConcatenationError {
+    implicit val ConcatenationErrorDescribe: Describe[ConcatenationError] =
+      _.description
+  }
+
+  sealed trait FormatError extends ConcatenationError{
+    def description: String
+  }
+
+  case class Invalid(input: String, reason: String, index: Option[Int]) extends FormatError {
+    override def description: String = {
+      val main =
+        s"""|'$input' seems to be an invalid path.
+            |Reported reason:
+            |    $reason""".stripMargin
+      val rest = index.map{i =>
+        s"""|
+            |$input
+            |${" " * i}^""".stripMargin
+      }
+
+      main + rest.getOrElse("")
+    }
+  }
+
+  case class NotRelative(self: String, input: String) extends ConcatenationError {
+    override def description: String =
+      s"""|Impossible to concatenate an absolute path to another path.
+          |    Failed tried to concatenate '$input'
+          |    after '$self'""".stripMargin
+  }
+
 }
 

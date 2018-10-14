@@ -87,11 +87,11 @@ package ipkgops {
 
   sealed trait ParseError
   object ParseError {
-    case object EmptyIpkgFile                                                extends ParseError
-    case class  InvalidPackageDeclaration(line: Int)                         extends ParseError
-    case class  InvalidKeyValuePair(line: Int)                               extends ParseError
-    case object MissingModulesSetting                                        extends ParseError
-    case class  InvalidSourcedirPath(line: Int, cause: Path.PathFormatError) extends ParseError
+    case object EmptyIpkgFile                                            extends ParseError
+    case class  InvalidPackageDeclaration(line: Int)                     extends ParseError
+    case class  InvalidKeyValuePair(line: Int)                           extends ParseError
+    case object MissingModulesSetting                                    extends ParseError
+    case class  InvalidSourcedirPath(line: Int, cause: Path.FormatError) extends ParseError
   }
 
   case class IpkgMeta(

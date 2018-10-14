@@ -1,10 +1,9 @@
 load("@io_bazel_rules_scala//scala:scala.bzl", "scala_library", "scala_binary", "scala_test")
 
 scala_library(
-    name = "terminate",
+    name = "describe",
     srcs = glob(["*.scala"]),
-    deps = ["//ip/codereporting:codereporting"],
-    exports = ["//ip/codereporting:codereporting"],
+    deps = [],
     visibility = ["//visibility:public"]
 )
 

@@ -6,8 +6,7 @@ scala_library(
     deps = [
       "//ip/fileops/path:path",
       "//ip/result:result",
-      "//ip/terminate:terminate",
-      "//ip/codereporting:codereporting"],
+      "//ip/terminate:terminate"],
     visibility = ["//visibility:public"]
 )
 
