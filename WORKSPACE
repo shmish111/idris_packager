@@ -1,6 +1,5 @@
 #rules_scala_version="63eab9f4d80612e918ba954211f377cc83d27a07" # update this as needed
-#rules_scala_version="b537bddc58a77318b34165812a0311ef52806318"
-rules_scala_version="e8328761275fe782c25d098a376ad13cc9e36899"
+rules_scala_version="b537bddc58a77318b34165812a0311ef52806318"
 http_archive(
              name = "io_bazel_rules_scala",
              url = "https://github.com/bazelbuild/rules_scala/archive/%s.zip"%rules_scala_version,
