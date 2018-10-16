@@ -102,6 +102,10 @@ object Path {
   sealed trait FormatError extends ConcatenationError{
     def description: String
   }
+  object FormatError {
+    implicit val FormatErrorDescribe: Describe[FormatError] =
+      _.description
+  }
 
   case class Invalid(input: String, reason: String, index: Option[Int]) extends FormatError {
     override def description: String = {
