@@ -7,6 +7,7 @@ import ip.result._
 import ip.terminate._
 import ip.stringext._
 import ip.describe._
+import ip.throwableext._
 
 package fileops {
 
@@ -63,15 +64,18 @@ package fileops {
         case e: java.lang.SecurityException =>
           Result.failure(DirCreationError.JavaSecurityException(e))
       }
-    def list: Result[DirListError, List[RelativePath]] = {
+    def list: Result[DirListError, List[RelativePath]] = Result {
       try {
         val listOfFiles = path.toJava.toFile.listFiles.toList
 
-        Result.success( listOfFiles.map(f => new RelativePath(f.toPath)))
+        Right( listOfFiles.map(f => new RelativePath(f.toPath)))
       }
       catch {
+        case securityException: java.lang.SecurityException =>
+          Left(DirListError.JavaSecurity(path, securityException))
         case otherwise: Throwable =>
-          throw otherwise
+          fatal( "An unexpected exception has been thrown while trying to list" ` `
+                s"the content of '$path'", otherwise)
       }
     }
     def find(regexFilenamePattern: String): Result[DirListError, List[RelativePath]] = {
@@ -151,8 +155,18 @@ package fileops {
     case class JavaSecurityException(cause: java.lang.SecurityException) extends FileRemoveError
   }
 
-  sealed trait DirListError
+  sealed trait DirListError {
+    def description: String
+  }
   object DirListError {
+
+    case class JavaSecurity(path: AbsolutePath, cause: java.lang.SecurityException) extends DirListError {
+      def description: String =
+        cause.description(s"For some reason, a java SecurityManager has been configured, that prevents reading '$path'")
+    }
+
+    implicit val DescribeDirListError: Describe[DirListError] =
+      _.description
   }
 }
 

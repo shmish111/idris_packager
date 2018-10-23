@@ -14,6 +14,7 @@ scala_binary(
       "//ip/terminate:terminate",
       "//ip/describe:describe",
       "//ip/idris:idris",
+      "//ip/idris/install:install",
       "//ip/fileops/path:path"],
     main_class = "ip.IdrisPackager",
     visibility = ["//visibility:public"],

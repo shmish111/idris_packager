@@ -7,8 +7,9 @@ import ip.zipops._
 import ip.tupleops._
 import ip.result._
 import ip.logger.Logger
-import ip.idris._
+import ip.idris.Idris
 import ip.describe._
+import ip.idris.install._
 
 object IdrisPackager {
 
@@ -48,44 +49,6 @@ object IdrisPackager {
       case _ =>
     }
   }
-
-
-  private def findModuleIpkgPath(modulePath: AbsolutePath): R[AbsolutePath] =
-    modulePath
-      .whenDir{dir =>
-         dir.find(raw".*\.ipkg") transform {
-           case Right(target :: Nil) => Result.success(modulePath / target)
-           case Right(Nil) => Result.failure(s"Provided module path '$modulePath' doesn't containt any ipkg file")
-           case Right(_) => Result.failure(s"Provided module path '$modulePath' containts more than one ipkg file and choosing is imposible")
-           case Left(cause) => Result.failure(s"Trying to locate an ipkg file at '$modulePath', something went wrong due to:\n$cause")
-         }
-       }
-      .otherwise {_ =>
-         Result.failure(s"Provided module path '$modulePath' doesn't point to an existing directory")
-       }
-
-  private def tempDir: R[AbsolutePath] =
-    resources.temporaryDirectory.mapError(_.toString)
-
-  private def install(ipzPath: AbsolutePath): R[AbsolutePath] =
-    for {
-      targetModuleExtractionPath <- tempDir
-      _                          <- unzip(ipzPath, targetModuleExtractionPath).mapError(_.toString)
-      ipkgPath                   <- findModuleIpkgPath(targetModuleExtractionPath)
-      content                    <- readUTF8(ipkgPath)
-                                        .mapError(error => s"The content of the file could not be read because: $error")
-      _                           = println(s"The content of the file is:\n$content")
-      ipkgMeta                   <- parse(content)
-                                        .mapError(errors => s"The content could not be parsed due to:\n${errors.mkString("\n")}")
-      sourcedir                  <- ipkgMeta
-                                        .sourcedir
-                                        .getOrElse(Path.dot) match {
-                                           case r: RelativePath => Result.success(r)
-                                           case a: AbsolutePath => Result.failure(s"Only relative sourcedirs are accepted, but the module has '$a' configured")
-                                         }
-    } yield {
-      targetModuleExtractionPath / sourcedir
-    }
 
   def runIdris(idris: Idris, idrisModules: List[AbsolutePath], idrisArguments: List[String])(implicit logger: Logger): RU = {
     for {

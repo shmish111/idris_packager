@@ -7,6 +7,7 @@ scala_library(
             "//ip/result:result",
             "//ip/describe:describe",
             "//ip/terminate:terminate",
+            "//ip/throwableext:throwableext",
             "//ip/stringext:stringext"],
     visibility = ["//visibility:public"]
 )
