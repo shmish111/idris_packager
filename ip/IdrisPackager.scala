@@ -7,6 +7,8 @@ import ip.zipops._
 import ip.tupleops._
 import ip.result._
 import ip.logger.Logger
+import ip.idris._
+import ip.describe._
 
 object IdrisPackager {
 
@@ -29,9 +31,11 @@ object IdrisPackager {
         arguments <- parseArguments(argumentStrings)
         _         <- arguments match {
                        case Arguments.Create(idrisPath, modulePath, targetPath, dependencies) =>
-                         create(idrisPath, modulePath, targetPath, dependencies)
+                         val idris = Idris.Plain(idrisPath, Path.current)
+                         create(idris, modulePath, targetPath, dependencies)
                        case Arguments.Idris(idrisPath, idrisModules, idrisArguments) =>
-                         runIdris(idrisPath, idrisModules, idrisArguments)
+                         val idris = Idris.Plain(idrisPath, Path.current)
+                         runIdris(idris, idrisModules, idrisArguments)
                      }
 
       } yield {
@@ -60,18 +64,6 @@ object IdrisPackager {
          Result.failure(s"Provided module path '$modulePath' doesn't point to an existing directory")
        }
 
-  private def run(idrisPath: AbsolutePath, pwd: Option[AbsolutePath], args: String*): Unit = {
-    import scala.sys.process._
-    val params = Seq(idrisPath.toString) ++ args
-    println("Going to execute: ")
-    println(params.mkString(" "))
-    Process(
-      params,
-      pwd.map(_.toJava.toFile)).!
-    println("Executed")
-    ()
-  }
-
   private def tempDir: R[AbsolutePath] =
     resources.temporaryDirectory.mapError(_.toString)
 
@@ -95,25 +87,21 @@ object IdrisPackager {
       targetModuleExtractionPath / sourcedir
     }
 
-  def runIdris(idrisPath: AbsolutePath, idrisModules: List[AbsolutePath], idrisArguments: List[String]): RU = {
-    println(s"Idris is located at $idrisPath")
-
+  def runIdris(idris: Idris, idrisModules: List[AbsolutePath], idrisArguments: List[String])(implicit logger: Logger): RU = {
     for {
       installedModules  <-  idrisModules.map(install).sequence.mapError(es => es.mkString("\n"))
+      imSearchPaths = installedModules.flatMap(m => List("-i", m.toString))
+      _ <- idris((imSearchPaths ++ idrisArguments) :_*).describe
     } yield {
-      val imSearchPaths = installedModules.flatMap(m => List("-i", m.toString))
-      run(idrisPath, None, (imSearchPaths ++ idrisArguments) :_*)
       ()
     }
 
   }
 
-  def create(idrisPath: AbsolutePath, modulePath: AbsolutePath, target: AbsolutePath, dependencies: List[AbsolutePath]): RU = {
+  def create(idris: Idris, modulePath: AbsolutePath, target: AbsolutePath, dependencies: List[AbsolutePath])(implicit logger: Logger): RU = {
 
     println(s"\n The path is: $modulePath")
     println(dependencies)
-
-    println(s"Idris is located at $idrisPath")
 
     for {
 
@@ -122,7 +110,7 @@ object IdrisPackager {
       modules   <- dependencies.map(install).sequence.mapError(es => es.mkString("\n"))
       modPaths   = modules.flatMap(m => List("-i", m.toString))
       extraArgs  = List("--build", modulePath.toString) ++ modPaths
-      _          = run(idrisPath, Some(root), extraArgs :_*)
+      _          = idris.from(root)(extraArgs :_*)
 
       content   <- readUTF8(modulePath)
                        .mapError(error => s"The content of the file could not be read because: $error")
@@ -196,6 +184,11 @@ object IdrisPackager {
          case rp: RelativePath => Path.current / rp
        }
       .mapError{error => s"Error parsing the $description path '$candidate': is not a valid path"}
+
+  implicit class ResultExtensionOps[E, T](val r: Result[E, T]) extends AnyVal {
+    def describe(implicit desc: Describe[E]): Result[String, T] =
+      r.mapError(_.description)
+  }
 
   sealed trait Arguments
   object Arguments {
