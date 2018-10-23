@@ -242,6 +242,10 @@ object IdrisPackager {
                 Arguments.Idris(idrisPath, mods, idrisArguments)
              }
         case _ =>
+          //val e = new RuntimeException("Fooo")
+          //val Right(p: AbsolutePath) = Path("/Foo/baar/thing.nix").run
+          //ip.fileops.ReadError(p, e)
+          //ip.fileops.readAllBytes
           Result.failure("Wrong arguments\n" + USAGE)
       }
     }

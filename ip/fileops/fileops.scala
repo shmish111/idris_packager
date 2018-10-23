@@ -4,25 +4,43 @@ import java.nio.file.{Files => JFiles}
 
 import ip.fileops.path._
 import ip.result._
+import ip.terminate._
+import ip.stringext._
+import ip.describe._
 
 package fileops {
 
-  sealed trait ReadError
+  sealed trait ReadError {
+    def description: String
+  }
   object ReadError {
 
-    case class  NoSuchFile(path: AbsolutePath) extends ReadError
-
-    case object IO                             extends ReadError
-    case object OutOfMemory                    extends ReadError
-    case object JavaSecurity                   extends ReadError
+    case class NoSuchFile(path: AbsolutePath, t: Throwable) extends ReadError {
+      override def description: String = toString
+    }
+    case class IO(t: java.io.IOException) extends ReadError {
+      override def description: String = toString
+    }
+    case class OutOfMemory(t: java.lang.OutOfMemoryError) extends ReadError {
+      override def description: String = toString
+    }
+    case class JavaSecurity(t: java.lang.SecurityException) extends ReadError {
+      override def description: String = toString
+    }
 
     def apply(path: AbsolutePath, t: Throwable): ReadError =
       t match {
-        case _: java.nio.file.NoSuchFileException => NoSuchFile(path)
-        case _: java.io.IOException               => IO
-        case _: java.lang.OutOfMemoryError        => OutOfMemory
-        case _: java.lang.SecurityException       => JavaSecurity
+        case t: java.nio.file.NoSuchFileException => NoSuchFile(path, t)
+        case t: java.io.IOException               => IO(t)
+        case t: java.lang.OutOfMemoryError        => OutOfMemory(t)
+        case t: java.lang.SecurityException       => JavaSecurity(t)
+        case t: Throwable =>
+          fatal( "An unexpected exception has been thrown while trying to read" ` `
+                s"the content of '$path' into memory", t)
       }
+
+    implicit val describeReadError: Describe[ReadError] =
+      _.description
   }
  
   sealed trait FileSystemRef{val path: AbsolutePath}
@@ -145,12 +163,15 @@ package object fileops {
 
 
   def readAllBytes(path: AbsolutePath): Result[ReadError, Array[Byte]] =
-    try {
-      Result.success(JFiles.readAllBytes(path.toJava))
-    }
-    catch {
-      case t: Throwable =>
-        Result.failure(ReadError(path, t))
+    Result{
+      try {
+        val bytes = JFiles.readAllBytes(path.toJava)
+        Right(bytes)
+      }
+      catch {
+        case t: Throwable =>
+          Left(ReadError(path, t))
+      }
     }
 
   implicit class FileSystemOps(val path: AbsolutePath) extends AnyVal {

@@ -3,7 +3,11 @@ load("@io_bazel_rules_scala//scala:scala.bzl", "scala_library", "scala_binary", 
 scala_library(
     name = "fileops",
     srcs = glob(["*.scala"]),
-    deps = ["//ip/fileops/path:path", "//ip/result:result"],
+    deps = ["//ip/fileops/path:path",
+            "//ip/result:result",
+            "//ip/describe:describe",
+            "//ip/terminate:terminate",
+            "//ip/stringext:stringext"],
     visibility = ["//visibility:public"]
 )
 

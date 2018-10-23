@@ -72,20 +72,19 @@ object Path {
       if (jpath.isAbsolute) new AbsolutePath(jpath)
     else                    new RelativePath(jpath)
 
-  def apply(input: String): Result[FormatError, Path] = {
-    import scala.util.Try
-    import scala.util.Success
-    import scala.util.Failure
+  def apply(input: String): Result[FormatError, Path] =
+    Result {
 
-    Try{JPaths.get(input)} match {
-      case Success(jp) =>
-        Result.success(apply(jp.normalize))
-      case Failure(ex: InvalidPathException) =>
-        Result.failure(Invalid(input, ex.getReason, Option(ex.getIndex).filter(_ >= 0)))
-      case Failure(t: Throwable) =>
-        fatal("Trying to parse a 'Path`, the JVM has thrown an undocumented exception", t)
+      try{
+        val jpath = JPaths.get(input)
+        Right(apply(jpath.normalize))
+      } catch {
+        case ex: InvalidPathException =>
+          Left(Invalid(input, ex.getReason, Option(ex.getIndex).filter(_ >= 0)))
+        case t: Throwable =>
+          fatal("Trying to parse a 'Path`, the JVM has thrown an undocumented exception", t)
+      }
     }
-  }
 
 //                                                                                  //
 // Errors

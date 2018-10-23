@@ -9,6 +9,9 @@ package object ipkgops {
 
   def parse(input: String): Result[List[ParseError], IpkgMeta] = {
 
+    type RL[T] = Result[List[ParseError], T]
+    type NonEmptyList[T] = ::[T]
+
     def parsePackage(line: String): Option[String] = {
       val base = line.trim
       val rq = raw"""package\s+"(.*)"""".r
@@ -34,15 +37,18 @@ package object ipkgops {
             else (hs + "\n" + ls, hi) :: t
         }.reverse
 
-    val lines =
-      input
-        .split("\n")
-        .toList
-        .zipWithIndex
-        .filterNot(_._1.isEmpty)
+    val lines: RL[NonEmptyList[(String, Int)]] =
+      Result {
+        input
+          .split("\n").toList
+          .zipWithIndex
+          .filterNot(_._1.isEmpty) match {
+            case _ : Nil.type => Left(List(ParseError.EmptyIpkgFile))
+            case other : NonEmptyList[(String, Int)] => Right(other)
+          }
+      }
 
-    lines match {
-      case Nil => Result.failure(List(ParseError.EmptyIpkgFile))
+    lines flatMap {
       case pkg :: restOfLines =>
         val pkgcandidate = parsePackage(pkg._1)
         val pkgParsingErrors =
@@ -91,18 +97,18 @@ package object ipkgops {
 package ipkgops {
 
   sealed trait IpkgFileMetadata {
-    val filePathOpt: Option[Path]
-    def header =
+    protected val filePathOpt: Option[Path]
+    private[ipkgops] def header =
       filePathOpt match {
         case None => "the ipkg module"
         case Some(filePath) => s"'${filePath.toString}'"
       }
-    def header(lineNumber: Int) =
+    private[ipkgops] def header(lineNumber: Int) =
       filePathOpt match {
         case None => s"line ${lineNumber + 1 } of the ipkg module"
         case Some(filePath) => s"'${filePath.toString}:${lineNumber + 1 }'"
       }
-    def Header(lineNumber: Int) =
+    private[ipkgops] def Header(lineNumber: Int) =
       filePathOpt match {
         case None => s"Line ${lineNumber + 1 } of the ipkg module"
         case Some(filePath) => s"'${filePath.toString}:${lineNumber + 1 }'"
