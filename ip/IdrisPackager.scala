@@ -110,7 +110,7 @@ object IdrisPackager {
       modules   <- dependencies.map(install).sequence.mapError(es => es.mkString("\n"))
       modPaths   = modules.flatMap(m => List("-i", m.toString))
       extraArgs  = List("--build", modulePath.toString) ++ modPaths
-      _         <- idris.from(root)(extraArgs :_*)
+      _         <- idris.from(root)(extraArgs :_*).describe
 
       content   <- readUTF8(modulePath)
                        .mapError(error => s"The content of the file could not be read because: $error")
