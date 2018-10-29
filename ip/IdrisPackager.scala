@@ -21,7 +21,7 @@ object IdrisPackager {
     println()
 
     implicit val log: Logger =
-      ip.logger.Logger.Console.trace
+      ip.logger.Logger.Console.info
 
     val argumentStrings =
       args.toList
@@ -60,20 +60,19 @@ object IdrisPackager {
 
       content   <- readUTF8(modulePath)
                        .mapError(error => s"The content of the file could not be read because: $error")
-      _          = println(s"The content of the file is:\n$content")
+      _          = logger.trace(s"The content of the file is:\n$content")
 
       ipkgMeta  <- parse(content)
                        .mapError(errors => s"The content could not be parsed due to:\n${errors.mkString("\n")}")
-      _          = println(s"The parsed content of the file is:\n$ipkgMeta")
 
       _         <- target
                      .when(_.isNoDirectory)
                      .orFail(s"'$target' can not be overwriten, because it's a directory")
 
-      _          = println(s"The zip will be created at: $target")
+      _          = logger.trace(s"The zip will be created at: $target")
       _         <- target
                        .whenFile{ f =>
-                          println(s"'$target' is an existing file and is going to be deleted")
+                          logger.debug(s"'$target' is an existing file and is going to be deleted")
                           f.rm
                            .mapError(error => s"'$target' already exists and can't be deleted due to '$error'") }
                        .whenDir{ d => Result.failure(s"'$target' is a directory and a file can't be created there") }
@@ -82,11 +81,11 @@ object IdrisPackager {
                        .map(_.mapError(error => s"target directory could not be created, due to: $error"))
                        .toSuccess("Target directory could not be created because, for some reason, the target file has no parent")
                        .flatMap(identity)
-      _          = println(s"The root of the zip file is going to be picked up from '$root'")
+      _          = logger.trace(s"The root of the zip file is going to be picked up from '$root'")
 
       ipkgFile  <- modulePath.last
                        .toSuccess(s"The package file at '$modulePath' seems to have no name")
-      _          = println(s"The name of the ipkg file is: $ipkgFile")
+      _          = logger.trace(s"The name of the ipkg file is: $ipkgFile")
 
       modules   <- ipkgMeta
                        .modules
@@ -105,7 +104,6 @@ object IdrisPackager {
                           )
                         ).sequence
                        .mapError(errors => s"Some of the modules are incorrect due to:\n${errors.mkString("\n")}")
-      _          = println(s"The modules are: $modules")
 
       sourcedir <- ipkgMeta
                        .sourcedir
@@ -115,7 +113,6 @@ object IdrisPackager {
                         }
 
       content    = ipkgFile :: modules.map(mod => sourcedir / mod)
-      _          = println(s"The zip file content is: $content")
       _         <- zip( target, root, content )
                        .mapError(error => s"The zip could not be created due to: $error")
     } yield {
