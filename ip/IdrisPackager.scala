@@ -9,7 +9,6 @@ import ip.result._
 import ip.logger.Logger
 import ip.idris.Idris
 import ip.describe._
-import ip.idris.install._
 
 object IdrisPackager {
 
@@ -32,11 +31,11 @@ object IdrisPackager {
         arguments <- parseArguments(argumentStrings)
         _         <- arguments match {
                        case Arguments.Create(idrisPath, modulePath, targetPath, dependencies) =>
-                         val idris = Idris.Plain(idrisPath, Path.current)
-                         create(idris, modulePath, targetPath, dependencies)
+                         val idris = Idris.WithModules(idrisPath, Path.current, dependencies)
+                         create(idris, modulePath, targetPath)
                        case Arguments.Idris(idrisPath, idrisModules, idrisArguments) =>
-                         val idris = Idris.Plain(idrisPath, Path.current)
-                         runIdris(idris, idrisModules, idrisArguments)
+                         val idris = Idris.WithModules(idrisPath, Path.current, idrisModules)
+                         idris(idrisArguments :_*).mapError(_.description)
                      }
 
       } yield {
@@ -50,30 +49,14 @@ object IdrisPackager {
     }
   }
 
-  def runIdris(idris: Idris, idrisModules: List[AbsolutePath], idrisArguments: List[String])(implicit logger: Logger): RU = {
-    for {
-      installedModules  <-  idrisModules.map(install).sequence.mapError(es => es.mkString("\n"))
-      imSearchPaths = installedModules.flatMap(m => List("-i", m.toString))
-      _ <- idris((imSearchPaths ++ idrisArguments) :_*).describe
-    } yield {
-      ()
-    }
-
-  }
-
-  def create(idris: Idris, modulePath: AbsolutePath, target: AbsolutePath, dependencies: List[AbsolutePath])(implicit logger: Logger): RU = {
-
-    println(s"\n The path is: $modulePath")
-    println(dependencies)
+  def create(idris: Idris, modulePath: AbsolutePath, target: AbsolutePath)(implicit logger: Logger): RU = {
 
     for {
 
       root      <- modulePath.parent
                        .toSuccess(s"The package file at '$modulePath' seems to have no parent")
-      modules   <- dependencies.map(install).sequence.mapError(es => es.mkString("\n"))
-      modPaths   = modules.flatMap(m => List("-i", m.toString))
-      extraArgs  = List("--build", modulePath.toString) ++ modPaths
-      _         <- idris.from(root)(extraArgs :_*).describe
+      args       = List("--build", modulePath.toString)
+      _         <- idris.from(root)(args :_*).describe
 
       content   <- readUTF8(modulePath)
                        .mapError(error => s"The content of the file could not be read because: $error")
