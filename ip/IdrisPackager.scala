@@ -44,7 +44,9 @@ object IdrisPackager {
 
 
     result.run match {
-      case Left(error) => log.error(error)
+      case Left(error) =>
+        log.error(error)
+        sys.exit(1)
       case _ =>
     }
   }
