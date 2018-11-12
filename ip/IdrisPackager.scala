@@ -77,7 +77,7 @@ object IdrisPackager {
                           logger.debug(s"'$target' is an existing file and is going to be deleted")
                           f.rm
                            .mapError(error => s"'$target' already exists and can't be deleted due to '$error'") }
-                       .whenDir{ d => Result.failure(s"'$target' is a directory and a file can't be created there") }
+                       .whenDir{ _ => Result.failure(s"'$target' is a directory and a file can't be created there") }
                        .whenNothing{ _ => RU }
       _         <- target.makeParents
                        .map(_.mapError(error => s"target directory could not be created, due to: $error"))
@@ -128,7 +128,7 @@ object IdrisPackager {
          case ap: AbsolutePath => ap
          case rp: RelativePath => Path.current / rp
        }
-      .mapError{error => s"Error parsing the $description path '$candidate': is not a valid path"}
+      .mapError{_ => s"Error parsing the $description path '$candidate': is not a valid path"}
 
   implicit class ResultExtensionOps[E, T](val r: Result[E, T]) extends AnyVal {
     def describe(implicit desc: Describe[E]): Result[String, T] =
