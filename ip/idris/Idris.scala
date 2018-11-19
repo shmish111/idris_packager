@@ -18,15 +18,24 @@ object Idris {
     override type Self = Plain
     override def apply(args: String*)(implicit logger: Logger): Result[IdrisExecutionError, Unit] = {
       Result{
-        import scala.sys.process._
         val params = Seq(idrisPath.toString) ++ args
         logger.trace(
           s"""|Going to execute idris, with command:
               |    ${params.mkString(" ")}""".stripMargin)
+
         val r =
-          Process(
-            params,
-            Option(wd.toJava.toFile)).run(true).exitValue
+        {
+          import java.lang.ProcessBuilder
+          import java.lang.ProcessBuilder.Redirect
+          import collection.JavaConverters._
+          val p = new ProcessBuilder(params.asJava)
+          p.directory(wd.toJava.toFile)
+          p.redirectInput(Redirect.INHERIT);
+          p.redirectOutput(Redirect.INHERIT);
+          p.redirectError(Redirect.INHERIT);
+
+          p.start().waitFor();
+        }
         logger.trace("Idris execution completed")
         if (r == 0) Right(())
         else Left(IdrisExecutionError.NonZeroExit(r))
