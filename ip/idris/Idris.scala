@@ -26,7 +26,7 @@ object Idris {
         val r =
           Process(
             params,
-            Option(wd.toJava.toFile)).!
+            Option(wd.toJava.toFile)).run(true).exitValue
         logger.trace("Idris execution completed")
         if (r == 0) Right(())
         else Left(IdrisExecutionError.NonZeroExit(r))
