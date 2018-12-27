@@ -21,7 +21,7 @@ object IdrisPackager {
     println()
 
     implicit val log: Logger =
-      ip.logger.Logger.Console.info
+      ip.logger.Logger.Console.trace
 
     val argumentStrings =
       args.toList
@@ -194,4 +194,3 @@ object IdrisPackager {
        |  ip create MODULE TARGET
        |""".stripMargin
 }
-
